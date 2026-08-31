@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getTasks, createTask, updateTask, deleteTask } from './api';
+import { getTasks, createTask, updateTask, deleteTask, login, register } from './api';
 import './App.css';
 
 const EMPTY_FORM = { title: '', description: '', priority: 'medium' };
@@ -28,7 +28,70 @@ function ConfirmDialog({ msg, onConfirm, onCancel }) {
     );
 }
 
+function AuthForm({ onAuth }) {
+    const [mode, setMode] = useState('login');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+        try {
+            const res = mode === 'login' ? await login(email, password) : await register(email, password);
+            if (mode === 'login') {
+                onAuth(res.token);
+            } else {
+                setMode('login');
+                setError(null);
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="auth-wrapper">
+            <form className="auth-form" onSubmit={handleSubmit}>
+                <h1>Task Manager</h1>
+                <h2>{mode === 'login' ? 'Sign In' : 'Create Account'}</h2>
+                {error && <p className="error">{error}</p>}
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                />
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                />
+                <button className="btn btn-primary" type="submit" disabled={loading}>
+                    {loading ? '...' : mode === 'login' ? 'Login' : 'Register'}
+                </button>
+                <p className="auth-switch">
+                    {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+                    <button type="button" className="link-btn" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
+                        {mode === 'login' ? 'Register' : 'Login'}
+                    </button>
+                </p>
+            </form>
+        </div>
+    );
+}
+
 export default function App() {
+    const [token, setToken] = useState(() => localStorage.getItem('token'));
+
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -46,6 +109,24 @@ export default function App() {
     const [deleteLoading, setDeleteLoading] = useState(null);
 
     const [toasts, setToasts] = useState([]);
+
+    const handleAuth = (t) => {
+        localStorage.setItem('token', t);
+        setToken(t);
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        setToken(null);
+        setTasks([]);
+    };
+
+    // Listen for 401 events dispatched by api.js
+    useEffect(() => {
+        const handler = () => handleLogout();
+        window.addEventListener('unauthorized', handler);
+        return () => window.removeEventListener('unauthorized', handler);
+    }, []);
 
     const addToast = useCallback((msg, type = 'success') => {
         const id = Date.now();
@@ -66,15 +147,15 @@ export default function App() {
         }
     }, []);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { fetchTasks(); }, []);
+    useEffect(() => {
+        if (token) fetchTasks();
+    }, [token, fetchTasks]);
 
     const handleCreate = async (e) => {
         e.preventDefault();
         setFormError(null);
         setFormLoading(true);
 
-        // Optimistic UI
         const tempId = `temp-${Date.now()}`;
         const optimistic = { _id: tempId, ...form, completed: false, createdAt: new Date() };
         setTasks((prev) => [optimistic, ...prev]);
@@ -142,6 +223,8 @@ export default function App() {
         }
     };
 
+    if (!token) return <AuthForm onAuth={handleAuth} />;
+
     return (
         <div className="app">
             <Toast toasts={toasts} />
@@ -153,7 +236,10 @@ export default function App() {
                 />
             )}
 
-            <h1>Task Manager</h1>
+            <div className="app-header">
+                <h1>Task Manager</h1>
+                <button className="btn btn-logout" onClick={handleLogout}>Logout</button>
+            </div>
 
             {/* Create Form */}
             <form className="task-form" onSubmit={handleCreate}>

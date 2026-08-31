@@ -4,6 +4,9 @@ const cors = require("cors");
 require("dotenv").config();
 
 const Task = require("./models/Task");
+const auth = require("./middleware/auth");
+const validate = require("./middleware/validate");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,8 +24,10 @@ mongoose
     .then(() => console.log("MongoDB Connected"))
     .catch((err) => console.error(err));
 
+app.use("/auth", authRoutes);
+
 // GET all tasks
-app.get("/tasks", async (req, res, next) => {
+app.get("/tasks", auth, async (req, res, next) => {
     try {
         const tasks = await Task.find();
 
@@ -37,7 +42,7 @@ app.get("/tasks", async (req, res, next) => {
 });
 
 // CREATE task
-app.post("/tasks", async (req, res, next) => {
+app.post("/tasks", auth, validate, async (req, res, next) => {
     try {
         const task = await Task.create(req.body);
 
@@ -52,7 +57,7 @@ app.post("/tasks", async (req, res, next) => {
 });
 
 // UPDATE task
-app.put("/tasks/:id", async (req, res, next) => {
+app.put("/tasks/:id", auth, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndUpdate(
             req.params.id,
@@ -81,7 +86,7 @@ app.put("/tasks/:id", async (req, res, next) => {
 });
 
 // DELETE task
-app.delete("/tasks/:id", async (req, res, next) => {
+app.delete("/tasks/:id", auth, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
 
