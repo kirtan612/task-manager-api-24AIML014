@@ -1,12 +1,16 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const Task = require("./models/Task");
 const auth = require("./middleware/auth");
 const validate = require("./middleware/validate");
 const authRoutes = require("./routes/authRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const emailRoutes = require("./routes/emailRoutes");
+const { verifyEmailService } = require("./services/emailService");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +29,11 @@ mongoose
     .catch((err) => console.error(err));
 
 app.use("/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/admin", adminRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api", emailRoutes);
+app.use("/", emailRoutes);
 
 // GET all tasks
 app.get("/tasks", auth, async (req, res, next) => {
@@ -59,6 +68,23 @@ app.post("/tasks", auth, validate, async (req, res, next) => {
 // UPDATE task
 app.put("/tasks/:id", auth, async (req, res, next) => {
     try {
+        const existingTask = await Task.findById(req.params.id);
+
+        if (!existingTask) {
+            return res.status(404).json({
+                success: false,
+                message: "Task not found"
+            });
+        }
+
+        // Requirement 5: Non-reversible - completed tasks cannot be moved back to ongoing
+        if (existingTask.completed && req.body.completed === false) {
+            return res.status(400).json({
+                success: false,
+                message: "Completed tasks cannot be moved back to ongoing."
+            });
+        }
+
         const task = await Task.findByIdAndUpdate(
             req.params.id,
             req.body,
@@ -67,13 +93,6 @@ app.put("/tasks/:id", auth, async (req, res, next) => {
                 runValidators: true
             }
         );
-
-        if (!task) {
-            return res.status(404).json({
-                success: false,
-                message: "Task not found"
-            });
-        }
 
         res.status(200).json({
             success: true,
@@ -118,4 +137,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    // Verify email service on startup (non-blocking)
+    verifyEmailService();
 });
