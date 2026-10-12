@@ -5,6 +5,7 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const Task = require("./models/Task");
+const cache = require("./utils/cache");
 const auth = require("./middleware/auth");
 const validate = require("./middleware/validate");
 const authRoutes = require("./routes/authRoutes");
@@ -35,25 +36,91 @@ app.use("/api/admin", adminRoutes);
 app.use("/api", emailRoutes);
 app.use("/", emailRoutes);
 
-// GET all tasks
+// Cache Telemetry & Debug Endpoint (Supplementary Problem 2)
+app.get("/tasks/cache/stats", auth, (req, res) => {
+    res.status(200).json({
+        success: true,
+        metrics: cache.getMetrics()
+    });
+});
+
+// Cache Flush Endpoint (for testing and benchmarks)
+app.post("/tasks/cache/clear", auth, (req, res) => {
+    cache.flushAll();
+    cache.resetMetrics();
+    res.status(200).json({
+        success: true,
+        message: "Cache flushed and telemetry counters reset"
+    });
+});
+
+// GET all tasks (Step 3: In-Memory Caching with node-cache, 60s TTL)
 app.get("/tasks", auth, async (req, res, next) => {
     try {
+        const cachedTasks = cache.getWithMetrics("all_tasks");
+        if (cachedTasks) {
+            return res.status(200).json({
+                success: true,
+                count: cachedTasks.length,
+                data: cachedTasks,
+                source: "cache"
+            });
+        }
+
         const tasks = await Task.find();
+        cache.set("all_tasks", tasks);
 
         res.status(200).json({
             success: true,
             count: tasks.length,
-            data: tasks
+            data: tasks,
+            source: "database"
         });
     } catch (err) {
         next(err);
     }
 });
 
-// CREATE task
+// GET single task by ID (Supplementary Problem 1: Separate single-task cache key)
+app.get("/tasks/:id", auth, async (req, res, next) => {
+    try {
+        const cacheKey = `task_${req.params.id}`;
+        const cachedTask = cache.getWithMetrics(cacheKey);
+        if (cachedTask) {
+            return res.status(200).json({
+                success: true,
+                data: cachedTask,
+                source: "cache"
+            });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: "Task not found"
+            });
+        }
+
+        cache.set(cacheKey, task);
+
+        res.status(200).json({
+            success: true,
+            data: task,
+            source: "database"
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// CREATE task (Step 4: Cache Invalidation on Write)
 app.post("/tasks", auth, validate, async (req, res, next) => {
     try {
         const task = await Task.create(req.body);
+
+        // Invalidate all_tasks cache so new task is immediately visible
+        cache.del("all_tasks");
 
         res.status(201).json({
             success: true,
@@ -65,7 +132,7 @@ app.post("/tasks", auth, validate, async (req, res, next) => {
     }
 });
 
-// UPDATE task
+// UPDATE task (Step 4 & Supplementary: Invalidate all_tasks and single-task cache)
 app.put("/tasks/:id", auth, async (req, res, next) => {
     try {
         const existingTask = await Task.findById(req.params.id);
@@ -94,6 +161,10 @@ app.put("/tasks/:id", auth, async (req, res, next) => {
             }
         );
 
+        // Invalidate both collection and specific task key
+        cache.del("all_tasks");
+        cache.del(`task_${req.params.id}`);
+
         res.status(200).json({
             success: true,
             message: "Task updated successfully",
@@ -104,7 +175,7 @@ app.put("/tasks/:id", auth, async (req, res, next) => {
     }
 });
 
-// DELETE task
+// DELETE task (Step 4 & Supplementary: Invalidate all_tasks and single-task cache)
 app.delete("/tasks/:id", auth, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
@@ -115,6 +186,10 @@ app.delete("/tasks/:id", auth, async (req, res, next) => {
                 message: "Task not found"
             });
         }
+
+        // Invalidate both collection and specific task key
+        cache.del("all_tasks");
+        cache.del(`task_${req.params.id}`);
 
         res.status(200).json({
             success: true,
