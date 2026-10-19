@@ -26,10 +26,11 @@ app.use((req, res, next) => {
     next();
 });
 
+const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/Task";
 mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => console.log("MongoDB Connected"))
-    .catch((err) => console.error(err));
+    .connect(mongoURI)
+    .then(() => console.log(`MongoDB Connected: ${mongoURI}`))
+    .catch((err) => console.error("MongoDB Connection Error:", err.message));
 
 app.use("/auth", authRoutes);
 app.use("/api/auth", authRoutes);

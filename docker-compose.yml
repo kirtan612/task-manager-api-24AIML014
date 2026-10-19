@@ -1,0 +1,65 @@
+services:
+  # 1. Database Service: Official MongoDB Image
+  mongodb:
+    image: mongo:latest
+    container_name: task_manager_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      # Supplementary Problem 3: Named volume for data persistence across container restarts
+      - mongo-data:/data/db
+    networks:
+      - app-network
+
+  # 2. Backend Service: Node/Express API with In-Memory Caching & EventEmitter
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: task_manager_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      # Reference MongoDB by service name within bridge network
+      - MONGO_URI=mongodb://mongodb:27017/Task
+      - JWT_SECRET=your_jwt_secret_key_change_in_production
+      - FRONTEND_URL=http://localhost:5173
+      - MAIL_HOST=smtp.gmail.com
+      - MAIL_PORT=587
+      - MAIL_USER=avenixfintech13@gmail.com
+      - MAIL_PASS=wlalepezhkffyujg
+      - MAIL_FROM="Task Manager <avenixfintech13@gmail.com>"
+      - ADMIN_EMAIL=kirtanjogani612@gmail.com
+      - ADMIN_REPORT_EMAIL=kirtanjogani612@gmail.com
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+
+  # 3. Frontend Service: React 19 + Vite Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: task_manager_frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+# Named volume for persistent MongoDB storage
+volumes:
+  mongo-data:
+    name: task_manager_mongo_data
+
+# Isolated bridge network for inter-container communication
+networks:
+  app-network:
+    name: task_manager_network
+    driver: bridge
