@@ -6,6 +6,8 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const Task = require("./models/Task");
 const cache = require("./utils/cache");
+const taskEvents = require("./events/taskEvents");
+require("./events/listeners"); // Register background notification listeners
 const auth = require("./middleware/auth");
 const validate = require("./middleware/validate");
 const authRoutes = require("./routes/authRoutes");
@@ -114,7 +116,7 @@ app.get("/tasks/:id", auth, async (req, res, next) => {
     }
 });
 
-// CREATE task (Step 4: Cache Invalidation on Write)
+// CREATE task (Step 4: Cache Invalidation & Practical: Asynchronous Background Event)
 app.post("/tasks", auth, validate, async (req, res, next) => {
     try {
         const task = await Task.create(req.body);
@@ -122,10 +124,21 @@ app.post("/tasks", auth, validate, async (req, res, next) => {
         // Invalidate all_tasks cache so new task is immediately visible
         cache.del("all_tasks");
 
+        // Immediate API response point (Demonstrating non-blocking behavior)
+        const apiTimestamp = new Date().toISOString();
+        console.log(`[API] Response sent at ${apiTimestamp} for Task "${task.title}"`);
+
         res.status(201).json({
             success: true,
             message: "Task created successfully",
             data: task
+        });
+
+        // Emit 'task-created' event handled asynchronously by background listener
+        taskEvents.emit("task-created", {
+            task,
+            user: req.user,
+            timestamp: apiTimestamp
         });
     } catch (err) {
         next(err);
@@ -175,7 +188,7 @@ app.put("/tasks/:id", auth, async (req, res, next) => {
     }
 });
 
-// DELETE task (Step 4 & Supplementary: Invalidate all_tasks and single-task cache)
+// DELETE task (Step 4 & Supplementary: Invalidate cache & emit task-deleted event)
 app.delete("/tasks/:id", auth, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
@@ -191,9 +204,20 @@ app.delete("/tasks/:id", auth, async (req, res, next) => {
         cache.del("all_tasks");
         cache.del(`task_${req.params.id}`);
 
+        // Immediate API response point
+        const apiTimestamp = new Date().toISOString();
+        console.log(`[API] Task delete response sent at ${apiTimestamp} for ID ${req.params.id}`);
+
         res.status(200).json({
             success: true,
             message: "Task deleted successfully"
+        });
+
+        // Emit 'task-deleted' event handled asynchronously by background listener
+        taskEvents.emit("task-deleted", {
+            task,
+            user: req.user,
+            timestamp: apiTimestamp
         });
     } catch (err) {
         next(err);
