@@ -1,0 +1,14 @@
+{
+  "name": "task-manager-api-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root configuration for deploying Task Manager API on Render",
+  "scripts": {
+    "postinstall": "npm install --prefix backend",
+    "build": "npm install --prefix backend",
+    "start": "npm start --prefix backend"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
