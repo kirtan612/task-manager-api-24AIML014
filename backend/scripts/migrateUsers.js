@@ -4,13 +4,14 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 
 const migrateUsers = async () => {
-    if (!process.env.MONGO_URI) {
+    const mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
+    if (!mongoURI) {
         console.error('Error: MONGO_URI is not defined in .env');
         process.exit(1);
     }
 
     try {
-        await mongoose.connect(process.env.MONGO_URI);
+        await mongoose.connect(mongoURI);
         console.log('MongoDB connected for user migration.');
 
         const result = await User.updateMany(

@@ -8,13 +8,14 @@ const seedAdmin = async () => {
     const email = process.env.ADMIN_EMAIL || process.argv[2] || 'admin@example.com';
     const password = process.env.ADMIN_PASSWORD || process.argv[3] || 'Admin@123';
 
-    if (!process.env.MONGO_URI) {
+    const mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
+    if (!mongoURI) {
         console.error('Error: MONGO_URI is not defined in .env');
         process.exit(1);
     }
 
     try {
-        await mongoose.connect(process.env.MONGO_URI);
+        await mongoose.connect(mongoURI);
         console.log('MongoDB connected for admin seeding.');
 
         let user = await User.findOne({ email: email.toLowerCase() });

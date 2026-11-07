@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const Task = require("./models/Task");
 const cache = require("./utils/cache");
@@ -26,10 +27,10 @@ app.use((req, res, next) => {
     next();
 });
 
-const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/Task";
+const mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/Task";
 mongoose
     .connect(mongoURI)
-    .then(() => console.log(`MongoDB Connected: ${mongoURI}`))
+    .then(() => console.log(`MongoDB Connected: ${mongoURI.replace(/:([^:@]+)@/, ':****@')}`))
     .catch((err) => console.error("MongoDB Connection Error:", err.message));
 
 app.use("/auth", authRoutes);
