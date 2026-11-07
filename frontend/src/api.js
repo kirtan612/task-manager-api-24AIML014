@@ -1,4 +1,16 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+/**
+ * Centralized API Service for Task Manager
+ * Communicates with backend configured via Vite environment variable VITE_API_BASE_URL
+ */
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+// Strip any accidental trailing slashes (e.g., https://api.render.com/ -> https://api.render.com)
+export const BASE_URL = rawBaseUrl.replace(/\/+$/, '');
+
+const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+});
 
 const handle = async (res) => {
     if (res.status === 401) {
@@ -7,89 +19,116 @@ const handle = async (res) => {
         window.dispatchEvent(new Event('unauthorized'));
         throw new Error('Session expired. Please log in again.');
     }
-    const data = await res.json();
-    if (!res.ok) {
-        throw new Error(data.error || data.message || 'Request failed');
+
+    let data = {};
+    try {
+        data = await res.json();
+    } catch {
+        data = {};
     }
+
+    if (!res.ok) {
+        throw new Error(data.error || data.message || `Request failed (${res.status})`);
+    }
+
     return data;
 };
 
-const authHeaders = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${localStorage.getItem('token')}`,
-});
+const request = async (url, options = {}) => {
+    try {
+        const res = await fetch(url, options);
+        return await handle(res);
+    } catch (err) {
+        if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+            throw new Error('Unable to connect to the backend API. Please check your network connection or server status.');
+        }
+        throw err;
+    }
+};
 
+// -----------------------------------------------------------------------------
+// Authentication Endpoints
+// -----------------------------------------------------------------------------
 export const register = (email, password) =>
-    fetch(`${BASE_URL}/auth/register`, {
+    request(`${BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
-    }).then(handle);
+    });
 
 export const login = (email, password) =>
-    fetch(`${BASE_URL}/auth/login`, {
+    request(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
-    }).then(handle);
+    });
 
 export const getMe = () =>
-    fetch(`${BASE_URL}/auth/me`, { headers: authHeaders() }).then(handle);
+    request(`${BASE_URL}/auth/me`, { headers: authHeaders() });
 
+// -----------------------------------------------------------------------------
+// Task Endpoints
+// -----------------------------------------------------------------------------
 export const getTasks = () =>
-    fetch(`${BASE_URL}/tasks`, { headers: authHeaders() }).then(handle);
+    request(`${BASE_URL}/tasks`, { headers: authHeaders() });
 
 export const createTask = (body) =>
-    fetch(`${BASE_URL}/tasks`, {
+    request(`${BASE_URL}/tasks`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify(body),
-    }).then(handle);
+    });
 
 export const updateTask = (id, body) =>
-    fetch(`${BASE_URL}/tasks/${id}`, {
+    request(`${BASE_URL}/tasks/${id}`, {
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify(body),
-    }).then(handle);
+    });
 
 export const deleteTask = (id) =>
-    fetch(`${BASE_URL}/tasks/${id}`, { method: 'DELETE', headers: authHeaders() }).then(handle);
+    request(`${BASE_URL}/tasks/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
 
-// Admin-only API calls
+// -----------------------------------------------------------------------------
+// Admin Endpoints
+// -----------------------------------------------------------------------------
 export const getAdminDashboard = () =>
-    fetch(`${BASE_URL}/admin/dashboard`, { headers: authHeaders() }).then(handle);
+    request(`${BASE_URL}/admin/dashboard`, { headers: authHeaders() });
 
 export const getAdminUsers = () =>
-    fetch(`${BASE_URL}/admin/users`, { headers: authHeaders() }).then(handle);
+    request(`${BASE_URL}/admin/users`, { headers: authHeaders() });
 
 export const getAdminReports = (startDate = '', endDate = '') => {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     const query = params.toString() ? `?${params.toString()}` : '';
-    return fetch(`${BASE_URL}/admin/reports${query}`, { headers: authHeaders() }).then(handle);
+    return request(`${BASE_URL}/admin/reports${query}`, { headers: authHeaders() });
 };
 
 export const sendAdminReportEmail = (recipientEmail = 'kirtanjogani612@gmail.com', startDate = '', endDate = '') =>
-    fetch(`${BASE_URL}/admin/reports/email`, {
+    request(`${BASE_URL}/admin/reports/email`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ recipientEmail, startDate, endDate }),
-    }).then(handle);
+    });
 
-// Password Recovery API calls
+// -----------------------------------------------------------------------------
+// Password Recovery Endpoints
+// -----------------------------------------------------------------------------
 export const forgotPassword = (email) =>
-    fetch(`${BASE_URL}/auth/forgot-password`, {
+    request(`${BASE_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-    }).then(handle);
+    });
 
 export const resetPassword = (token, password, confirmPassword) =>
-    fetch(`${BASE_URL}/auth/reset-password/${token}`, {
+    request(`${BASE_URL}/auth/reset-password/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password, confirmPassword }),
-    }).then(handle);
-
+    });

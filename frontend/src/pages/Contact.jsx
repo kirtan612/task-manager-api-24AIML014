@@ -147,7 +147,7 @@ export default function Contact({ addToast }) {
                                 <span className="contact-icon">📍</span>
                                 <div>
                                     <div className="contact-item-title">Workspace Tier</div>
-                                    <div className="contact-item-val">Enterprise Cluster (Local Node :5000)</div>
+                                    <div className="contact-item-val">Enterprise Cloud Cluster</div>
                                 </div>
                             </div>
                         </div>
