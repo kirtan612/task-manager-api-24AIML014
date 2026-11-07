@@ -67,7 +67,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 
 app.use(express.json());
 
@@ -78,7 +77,7 @@ app.use((req, res, next) => {
 });
 
 // Production Health Check Endpoints (for Render zero-downtime monitoring)
-app.get(["/health", "/api/health"], (req, res) => {
+const healthHandler = (req, res) => {
     res.status(200).json({
         status: "ok",
         uptime: process.uptime(),
@@ -86,7 +85,9 @@ app.get(["/health", "/api/health"], (req, res) => {
         database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
         environment: process.env.NODE_ENV || "development"
     });
-});
+};
+app.get("/health", healthHandler);
+app.get("/api/health", healthHandler);
 
 // API Root Status
 app.get("/", (req, res) => {
@@ -101,6 +102,18 @@ app.get("/", (req, res) => {
             health: "/health"
         }
     });
+});
+
+// Database Readiness Guard: prevent application traffic before database is ready
+app.use((req, res, next) => {
+    if (mongoose.connection.readyState !== 1) {
+        return res.status(503).json({
+            success: false,
+            message: "Database connection initializing. Please try again in a moment.",
+            databaseState: mongoose.connection.readyState === 2 ? "connecting" : "disconnected"
+        });
+    }
+    next();
 });
 
 // Authentication Routes
@@ -395,22 +408,22 @@ mongoose.connection.on("reconnected", () => {
 let server;
 
 const startServer = async () => {
+    // 1. Start HTTP listener first so Render's port detection and /health monitoring pass immediately
+    server = app.listen(PORT, "0.0.0.0", () => {
+        console.log(`[Server] Running on port ${PORT} (0.0.0.0) in ${process.env.NODE_ENV || "development"} mode`);
+        verifyEmailService();
+    });
+
+    // 2. Connect to MongoDB Atlas (guarded by readiness middleware for all application endpoints)
     try {
         console.log(`[Database] Connecting to MongoDB: ${maskedURI}`);
         await mongoose.connect(mongoURI, {
-            serverSelectionTimeoutMS: 10000,
+            serverSelectionTimeoutMS: 15000,
         });
         console.log(`[Database] Connected successfully to ${mongoose.connection.name || "Task"}`);
-
-        // Start listening only AFTER database connection is confirmed ready
-        server = app.listen(PORT, "0.0.0.0", () => {
-            console.log(`[Server] Running on port ${PORT} (0.0.0.0) in ${process.env.NODE_ENV || "development"} mode`);
-            verifyEmailService();
-        });
     } catch (err) {
-        console.error(`[Startup Error] Failed to connect to MongoDB: ${err.message}`);
-        console.error(`[Startup Error] Server halted to prevent requests to uninitialized database.`);
-        process.exit(1);
+        console.error(`[Database Error] Failed to connect to MongoDB: ${err.message}`);
+        console.error(`[Database Error] Please ensure MONGODB_URI is configured in Render Environment Variables and MongoDB Atlas Network Access permits 0.0.0.0/0.`);
     }
 };
 
