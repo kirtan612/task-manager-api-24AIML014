@@ -70,24 +70,6 @@ function AuthForm({ onAuth }) {
         setConfirmPassword('');
     };
 
-    const fillAdminJogani = () => {
-        setEmail('kirtanjogani612@gmail.com');
-        setPassword('Admin@123');
-        setError(null);
-    };
-
-    const fillAdminDefault = () => {
-        setEmail('admin@example.com');
-        setPassword('Admin@123');
-        setError(null);
-    };
-
-    const fillDemoUser = () => {
-        setEmail('user@example.com');
-        setPassword('User@123');
-        setError(null);
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
@@ -129,26 +111,6 @@ function AuthForm({ onAuth }) {
                     <h1 className="headline-md" style={{ marginBottom: '4px' }}>Slate Workspace</h1>
                     <p className="body-sm">Enterprise Task Management &amp; Analytics</p>
                 </div>
-
-                {mode === 'login' && (
-                    <div className="demo-account-trays">
-                        <div className="demo-trays-label">Quick-Fill Enterprise Credentials</div>
-                        <div className="demo-buttons-flex">
-                            <button type="button" className="btn-demo-fill" onClick={fillAdminJogani}>
-                                <span className="fill-role">👑 Admin (Primary)</span>
-                                <span className="fill-email">kirtanjogani612@gmail.com</span>
-                            </button>
-                            <button type="button" className="btn-demo-fill" onClick={fillAdminDefault}>
-                                <span className="fill-role">👑 Admin (Default)</span>
-                                <span className="fill-email">admin@example.com</span>
-                            </button>
-                            <button type="button" className="btn-demo-fill" onClick={fillDemoUser}>
-                                <span className="fill-role">👤 Standard User</span>
-                                <span className="fill-email">user@example.com</span>
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 {error && <div className="alert-error" style={{ marginBottom: '14px' }}>{error}</div>}
 
